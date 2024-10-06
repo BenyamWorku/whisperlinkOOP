@@ -23,6 +23,7 @@
 #include <csignal>
 #include <ctime>
 #include <cstdlib>
+#include <chrono>
 
 class Peer {
 public:
@@ -72,37 +73,42 @@ public:
     }
 
     // Method to broadcast presence
-    void broadcast_presence() {
-        udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
-        if (udp_sock == -1) {
-            std::cerr << "Error: Failed to create UDP socket." << std::endl;
-            return;
-        }
+   void broadcast_presence(int retries = 3, int delay_ms = 500) {
+        for (int i = 0; i < retries; ++i) {
+            udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
+            if (udp_sock == -1) {
+                std::cerr << "Error: Failed to create UDP socket." << std::endl;
+                return;
+            }
 
-        int broadcast_enable = 1;
-        if (setsockopt(udp_sock, SOL_SOCKET, SO_BROADCAST, &broadcast_enable, sizeof(broadcast_enable)) < 0) {
-            std::cerr << "Error: Failed to enable broadcast." << std::endl;
+            int broadcast_enable = 1;
+            if (setsockopt(udp_sock, SOL_SOCKET, SO_BROADCAST, &broadcast_enable, sizeof(broadcast_enable)) < 0) {
+                std::cerr << "Error: Failed to enable broadcast." << std::endl;
+                close(udp_sock);
+                return;
+            }
+
+            sockaddr_in broadcast_addr;
+            broadcast_addr.sin_family = AF_INET;
+            broadcast_addr.sin_port = htons(25000);
+            broadcast_addr.sin_addr.s_addr = inet_addr("255.255.255.255");
+
+            std::string message = name + ":" + std::to_string(tcp_port);
+            int bytes_sent = sendto(udp_sock, message.c_str(), message.size(), 0,
+                                    (sockaddr *)&broadcast_addr, sizeof(broadcast_addr));
+
+            if (bytes_sent == -1) {
+                std::cerr << "Error: Failed to broadcast presence." << std::endl;
+            } else {
+                std::cout << "Broadcasting presence on port " << tcp_port << "... (Attempt " << (i + 1) << "/" << retries << ")" << std::endl;
+            }
+
             close(udp_sock);
-            return;
+            udp_sock = -1;
+
+            // Wait before retrying
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
         }
-
-        sockaddr_in broadcast_addr;
-        broadcast_addr.sin_family = AF_INET;
-        broadcast_addr.sin_port = htons(25000);
-        broadcast_addr.sin_addr.s_addr = inet_addr("255.255.255.255");
-
-        std::string message = name + ":" + std::to_string(tcp_port);
-        int bytes_sent = sendto(udp_sock, message.c_str(), message.size(), 0,
-                                (sockaddr *)&broadcast_addr, sizeof(broadcast_addr));
-
-        if (bytes_sent == -1) {
-            std::cerr << "Error: Failed to broadcast presence." << std::endl;
-        } else {
-            std::cout << "Broadcasting presence on port " << tcp_port << "..." << std::endl;
-        }
-
-        close(udp_sock);
-        udp_sock = -1;
     }
 
     // Method to discover peers
@@ -132,7 +138,7 @@ public:
         }
 
         struct timeval timeout;
-        timeout.tv_sec = 10;
+        timeout.tv_sec = 20;//increased from 10 
         timeout.tv_usec = 0;
         setsockopt(udp_sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
@@ -164,28 +170,41 @@ public:
         udp_sock = -1;
     }
 
+  bool should_act_as_client() {
+        if (tcp_port < peer_port) {
+            std::cout << "Local port is lower, acting as client." << std::endl;
+            return true;
+        } else {
+            std::cout << "Local port is higher or equal, acting as server." << std::endl;
+            return false;
+        }
+    }
+
 bool establish_connection() {
         bool connected = false;
 
-        // Attempt to connect to the discovered peer (client mode)
+        // Determine role and establish connection accordingly
         if (!peer_ip.empty() && peer_port > 0) {
-            connection_sock = socket(AF_INET, SOCK_STREAM, 0);
-            if (connection_sock == -1) {
-                std::cerr << "Failed to create socket for connecting to peer." << std::endl;
-                return false;
-            }
+            if (should_act_as_client()) {
+                // Create a TCP socket for the connection (client mode)
+                connection_sock = socket(AF_INET, SOCK_STREAM, 0);
+                if (connection_sock == -1) {
+                    std::cerr << "Failed to create socket for connecting to peer." << std::endl;
+                    return false;
+                }
 
-            sockaddr_in peer_addr;
-            peer_addr.sin_family = AF_INET;
-            peer_addr.sin_port = htons(peer_port);
-            inet_pton(AF_INET, peer_ip.c_str(), &peer_addr.sin_addr);
+                sockaddr_in peer_addr;
+                peer_addr.sin_family = AF_INET;
+                peer_addr.sin_port = htons(peer_port);
+                inet_pton(AF_INET, peer_ip.c_str(), &peer_addr.sin_addr);
 
-            if (connect(connection_sock, (sockaddr *)&peer_addr, sizeof(peer_addr)) == 0) {
-                std::cout << "Successfully connected to peer: " << peer_name << " at " << peer_ip << ":" << peer_port << std::endl;
-                connected = true;
-            } else {
-                std::cerr << "Failed to connect to peer at " << peer_ip << ":" << peer_port << std::endl;
-                close(connection_sock);
+                if (connect(connection_sock, (sockaddr *)&peer_addr, sizeof(peer_addr)) == 0) {
+                    std::cout << "Successfully connected to peer: " << peer_name << " at " << peer_ip << ":" << peer_port << std::endl;
+                    connected = true;
+                } else {
+                    std::cerr << "Failed to connect to peer at " << peer_ip << ":" << peer_port << std::endl;
+                    close(connection_sock);
+                }
             }
         }
 
