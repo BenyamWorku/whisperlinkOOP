@@ -9,20 +9,9 @@
 #include <cstdlib>
 #include <ctime>
 #include <ifaddrs.h>
-#include <iostream>
-#include <string>
-#include <sys/socket.h>
 #include <sys/select.h>
 #include <thread>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <ifaddrs.h>
-#include <cstring> // for memset
 #include <fcntl.h>
-#include <csignal>
-#include <ctime>
-#include <cstdlib>
 #include <chrono>
 
 class Peer {
