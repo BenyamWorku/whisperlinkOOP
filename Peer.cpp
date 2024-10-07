@@ -199,7 +199,7 @@ bool establish_connection() {
         struct timeval tv;
         FD_ZERO(&read_fds);
         FD_SET(listening_sock, &read_fds);
-        tv.tv_sec = 5;  // 5 second timeout
+        tv.tv_sec = 20;  // was 5 second timeout
         tv.tv_usec = 0;
 
         int select_result = select(listening_sock + 1, &read_fds, NULL, NULL, &tv);
