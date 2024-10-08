@@ -6,13 +6,15 @@
 #include <unistd.h>
 #include <csignal>
 #include <cstring>
-#include <cstdlib>
+#include <cstdlib> // sytem ++
 #include <ctime>
 #include <ifaddrs.h>
 #include <sys/select.h>
 #include <thread>
 #include <fcntl.h>
 #include <chrono>
+#include <iomanip>
+
 
 class Peer
 {
@@ -217,12 +219,12 @@ public:
                     connected = true;
 
                     // introductory message- workaround to identify the late joining peer's name
-                    std::string initial_message = name + ":Hello!";
-                    int response = send(connection_sock, initial_message.c_str(), initial_message.size(), 0);
-                    if (response == -1)
-                    {
-                        std::cerr << "Error:failed to send intitial identification message." << std::endl;
-                    }
+                    // std::string initial_message = "Hello this is "+name;
+                    // int response = send(connection_sock, initial_message.c_str(), initial_message.size(), 0);
+                    // if (response == -1)
+                    // {
+                    //     std::cerr << "Error:failed to send intitial identification message." << std::endl;
+                    // }
                 }
                 else
                 {
@@ -252,19 +254,23 @@ public:
                 socklen_t client_size = sizeof(client_addr);
                 connection_sock = accept(listening_sock, (sockaddr *)&client_addr, &client_size);
 
-                if (connection_sock != -1)
-                {   // Extract peer information from the accepted connection
-                char client_ip[INET_ADDRSTRLEN];
-                inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
-                peer_ip = std::string(client_ip);
-                peer_port = ntohs(client_addr.sin_port);
-                peer_name = "Unknown_Peer";  // Assign a default name since I don't know it yet
-                std::cout << "Accepted incoming connection from peer!" << std::endl;
-                connected = true;
-                }
-                else
-                {
+                if (connection_sock == -1){
                     std::cerr << "Failed to accept incoming connection." << std::endl;
+                }
+                //  // Extract peer information from the accepted connection
+                // char client_ip[INET_ADDRSTRLEN];
+                // inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+                // peer_ip = std::string(client_ip);
+                // peer_port = ntohs(client_addr.sin_port);
+                // peer_name = "Unknown_Peer";  // Assign a default name since I don't know it yet
+                
+                
+                else
+                {   
+                    std::string peer_name;
+                    // if(!exchange_names(connection_sock,name,peer_name))
+                    std::cout << "Accepted incoming connection from peer!" << std::endl;
+                    connected = true;
                 }
             }
             else if (select_result == 0)
@@ -280,6 +286,43 @@ public:
         return connected;
     }
 
+    bool exchange_names(){
+        if(send(connection_sock,name.c_str(),name.length(),0)==-1){
+            std::cerr<<"Failed to send name to peer."<<std::endl;
+            return false;
+        }
+
+        //receive peer's name
+        char buffer[256];
+        int bytes_received=recv(connection_sock,buffer,sizeof(buffer)-1,0);
+        if(bytes_received <=0) {
+            std::cerr<<"Failed to receive peer's name."<<std::endl;
+            return false;
+        }
+        buffer[bytes_received]='\0';
+        peer_name=std::string(buffer);
+        std::cout<<"Connected to peer:"<<std::endl;
+        return true;
+    }
+  
+    void display_message(const std::string& message, bool is_local) {
+    const int term_width = 100; // Terminal width of 100 characters
+    const int max_msg_width = 60; // Maximum width for the message
+
+    std::string padded_message = message.substr(0, max_msg_width);
+    padded_message.resize(max_msg_width, ' ');
+
+    if (is_local) {
+        // Green background for local messages (left-aligned)
+        std::cout << "\033[42m" << padded_message << "\033[0m" << std::endl;
+    } else {
+        // Blue background for remote messages (right-aligned)
+        std::cout << std::right << std::setw(term_width - max_msg_width) << " ";
+        std::cout << "\033[44m" << padded_message << "\033[0m" << std::endl;
+    }
+}
+
+
     void handle_chat_session()
     {
         if (connection_sock == -1)
@@ -294,6 +337,7 @@ public:
         struct timeval tv;
 
         // Set up for chat session
+        system("clear");
         std::cout << "Chat session started with peer: " << peer_name << std::endl;
         while (true)
         {
@@ -314,15 +358,16 @@ public:
             }
             if (FD_ISSET(STDIN_FILENO, &read_fds))
             {
-                std::cout << "You: ";
+                // std::cout << name+":";
                 std::getline(std::cin, input_message);
-                std::cout << std::flush;
+                display_message(input_message,true);
+                // std::cout << std::flush;
                 if (send(connection_sock, input_message.c_str(), input_message.size(), 0) == -1)
                 {
                     std::cerr << "Error: Failed to send message." << std::endl;
                     break;
                 }
-
+                
                 if (input_message == "/exit")
                 {
                     std::cout << "Ending chat session." << std::endl;
@@ -338,11 +383,8 @@ public:
                 if (bytes_received > 0)
                 {
                     buffer[bytes_received] = '\0';
-                    if (peer_name == "Unknown_Peer")
-                    {
-                        peer_name = extract_peer_name(buffer); // Update peer name if it's the first message
-                    }
-                    std::cout << peer_name << ": " << buffer << std::endl;
+                    display_message(buffer,false);
+                    // std::cout << peer_name << ": " << buffer << std::endl;
                 }
                 else if (bytes_received == 0)
                 {
@@ -359,16 +401,7 @@ public:
     }
 
 private:
-    std::string extract_peer_name(const std::string &message)
-    {
-        // Simple workaround to extract peer name from the message
-        size_t colon_pos = message.find(':');
-        if (colon_pos != std::string::npos)
-        {
-            return message.substr(0, colon_pos);
-        }
-        return "Unknown_Peer";
-    }
+   
 
     std::string name;
     std::string local_ip;
@@ -476,6 +509,12 @@ int main(int argc, char *argv[])
     if (peer.establish_connection())
     {
         // Connection established, start chat session
+
+        //Exchange names after connection
+        if(!peer.exchange_names()) {
+            std::cerr<<"Failed to exchange names."<<std::endl;
+            return 1;
+        }
         std::cout << "Connection established. Starting chat session..." << std::endl;
         peer.handle_chat_session();
     }
