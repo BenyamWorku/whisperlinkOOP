@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <csignal>
 #include <cstring>
-#include <cstdlib> // sytem ++
+#include <cstdlib> // system ++
 #include <ctime>
 #include <ifaddrs.h>
 #include <sys/select.h>
@@ -14,12 +14,11 @@
 #include <fcntl.h>
 #include <chrono>
 #include <iomanip>
+#include "Peer.h"
 
-class Peer
-{
-public:
+
     // Constructor to initialise the peer
-    Peer(const std::string &local_name)
+    Peer::Peer(const std::string &local_name)
         : name(local_name), udp_sock(-1), connection_sock(-1), listening_sock(-1)
     {
         local_ip = get_local_ip();
@@ -27,13 +26,13 @@ public:
     }
 
     // Destructor to clean up sockets
-    ~Peer()
+    Peer::~Peer()
     {
         cleanup();
     }
 
     // Method to initialise the listener
-    void initialize_listener()
+    void Peer::initialize_listener()
     {
         listening_sock = socket(AF_INET, SOCK_STREAM, 0);
         if (listening_sock == -1)
@@ -70,7 +69,7 @@ public:
     }
 
     // Method to broadcast presence
-    void broadcast_presence()
+    void Peer::broadcast_presence()
     {
         udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
         if (udp_sock == -1)
@@ -111,7 +110,7 @@ public:
     }
 
     // Method to discover peers once
-    bool discover_peers()
+    bool Peer::discover_peers()
     {
         udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
         if (udp_sock == -1)
@@ -183,7 +182,7 @@ public:
         return false;
     }
 
-    bool should_act_as_client()
+    bool Peer::should_act_as_client()
     {
         if (tcp_port < peer_port)
         {
@@ -197,7 +196,7 @@ public:
         }
     }
 
-    bool establish_connection()
+    bool Peer::establish_connection()
     {
         bool connected = false;
 
@@ -271,7 +270,7 @@ public:
         return connected;
     }
 
-    bool exchange_names()
+    bool Peer::exchange_names()
     {
         if (send(connection_sock, name.c_str(), name.length(), 0) == -1)
         {
@@ -293,7 +292,7 @@ public:
         return true;
     }
 
-    void display_message(const std::string &message, bool is_local)
+    void Peer::display_message(const std::string &message, bool is_local)
     {
         const int term_width = 100;   // Terminal width of 100 characters
         const int max_msg_width = 60; // Maximum width for the message
@@ -314,7 +313,7 @@ public:
         }
     }
 
-    void handle_chat_session()
+    void Peer::handle_chat_session()
     {
         if (connection_sock == -1)
         {
@@ -397,21 +396,10 @@ public:
         }
     }
 
-private:
-    std::string name;
-    std::string local_ip;
-    int tcp_port;
-    int udp_sock;
-    int connection_sock;
-    int listening_sock;
 
-    // Discovered peer information
-    std::string peer_name;
-    std::string peer_ip;
-    int peer_port{0}; // initialised to avoid unpredictable default behaviour
 
     // Method to clean up sockets and resources
-    void cleanup()
+    void Peer::cleanup()
     {
         if (udp_sock != -1)
         {
@@ -430,7 +418,7 @@ private:
         }
     }
 
-    std::string get_local_ip()
+    std::string Peer::get_local_ip()
     {
         struct ifaddrs *ifap, *ifa;
         struct sockaddr_in *sa;
@@ -469,55 +457,5 @@ private:
 
         return local_ip;
     }
-};
 
-int main(int argc, char *argv[])
-{
-    if (argc != 2)
-    {
-        std::cerr << "Usage: " << argv[0] << " <local_name>" << std::endl;
-        return 1;
-    }
 
-    std::string local_name = argv[1];
-    Peer peer(local_name);
-
-    // Initialize listener
-    peer.initialize_listener();
-
-    // Broadcast presence
-    peer.broadcast_presence();
-
-    // Attempt to discover peers
-    bool peer_discovered = peer.discover_peers();
-
-    if (peer_discovered)
-    {
-        std::cout << "Peer discovered. Attempting to establish connection..." << std::endl;
-    }
-    else
-    {
-        std::cout << "No peers discovered. Waiting for incoming connections..." << std::endl;
-    }
-
-    // Try to establish a connection
-    if (peer.establish_connection())
-    {
-        // Connection established, start chat session
-
-        // Exchange names after connection
-        if (!peer.exchange_names())
-        {
-            std::cerr << "Failed to exchange names." << std::endl;
-            return 1;
-        }
-        std::cout << "Connection established. Starting chat session..." << std::endl;
-        peer.handle_chat_session();
-    }
-    else
-    {
-        std::cerr << "Failed to establish connection." << std::endl;
-    }
-
-    return 0;
-}
