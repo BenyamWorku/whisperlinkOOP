@@ -106,7 +106,7 @@ Contributions to WhisperLink are welcome! Please follow these steps:
 
 ## Challenges
 
-During the development of WhisperLink, we encountered several challenges:
+During the development of WhisperLink, I encountered several challenges:
 
 1. **Encryption Implementation**: Attempts to integrate OpenSSL and libsodium for message encryption were unsuccessful. OpenSSL didn't work as expected, and libsodium faced issues even with hardcoded keys. Implementing robust encryption remains a priority for future development to ensure secure communication.
 
