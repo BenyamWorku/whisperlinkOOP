@@ -1,0 +1,3 @@
+/home/benmlengineer/Documents/wywm/Capstone/whisperlinkOOP/build/CMakeFiles/whisperlink.dir
+/home/benmlengineer/Documents/wywm/Capstone/whisperlinkOOP/build/CMakeFiles/edit_cache.dir
+/home/benmlengineer/Documents/wywm/Capstone/whisperlinkOOP/build/CMakeFiles/rebuild_cache.dir
